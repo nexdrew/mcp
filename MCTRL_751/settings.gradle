@@ -1,0 +1,36 @@
+rootProject.name = "mcp"
+
+def file = file("../hosts.properties")
+if(file.canRead()) {
+	def hosts = new Properties()
+	hosts.load(new FileInputStream(file))
+	hosts.each { k,v ->
+		//println "found host $k with group $v"
+		include k
+	}
+} else {
+	System.err.println """
+**WARNING**: Could not find the hosts.properties file!
+
+MCP is pretty useless without a properties file defining which remote hosts to run commands against.
+
+Copy the 'hosts.properties.template' file to 'hosts.properties' and replace the contents with the
+hostnames on which you have already installed sark. The structure of the 'hosts.properties' is:
+
+    <host>=<group>
+
+Where <host> is the hostname or IP and <group> is a logical name used to group multiple hosts that
+can have actions executed at the same time, like stopping and starting an app server. Keep in mind
+that rolling deployments will be based on group name, so even though different hosts may be running
+the same applications, they should have different group names so each group can be manipulated
+independently of the other.
+
+See 'hosts.properties.template' for examples.
+
+The 'hosts.properties' file should be in same directory as the mcp script.
+
+**NOTE**: Running commands against group names has not yet been implemented. You currently have to
+specify individual hosts via @host1 @host2 etc (and potentially use the --parallel flag) to execute
+commands against more than one host at a time.
+"""
+}

@@ -1,0 +1,15 @@
+# hypothetical test env
+testhost1=test_groupA
+testhost2=test_groupB
+testhost3=test_groupC
+testhost4=test_groupD
+
+# hypothetical production env
+prdhost1=prd_groupA
+prdhost2=prd_groupA
+prdhost3=prd_groupB
+prdhost4=prd_groupB
+prdhost5=prd_groupC
+prdhost6=prd_groupC
+prdhost7=prd_groupD
+prdhost8=prd_groupD

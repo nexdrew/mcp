@@ -1,0 +1,253 @@
+//-- custom namespace
+ext.mcp = [:]
+
+//====================== public/api namespace ======================//
+ext.mcp.api = [:]
+ext.mcp.api.workActions = [
+	//-- note that each key here corresponds to a matching key in mcp.internal.workCommands
+	"env":["env", "test"],
+	"1stage":["stage", "download"],
+	"2stop":["stop"],
+	"3swap":["swap", "replace", "deploy"],
+	"4start":["start"]
+	//TODO: action for interactive mode?
+]
+ext.mcp.api.docActions = [
+	//-- note that each key here corresponds to a matching key in mcp.docs
+	"help":["help", "?", "usage"],
+	"logo":["logo", "mcp", "license"],
+	"syntax":["syntax"],
+	"examples":["example", "examples"],
+	"actions":["actions"],
+	"hosts":["hosts"]
+]
+
+//====================== private/internal namespace ======================//
+ext.mcp.internal = [:]
+ext.mcp.internal.prelimChars = ['%', '@']
+ext.mcp.internal.args = [:]
+ext.mcp.internal.tasksAdded = []
+ext.mcp.internal.firstTask = null
+ext.mcp.internal.workCommands = [
+	"env":["gradle":false, "cmd":"env"],
+	"1stage":["gradle":true, "cmd":"a_download"],
+	"2stop":["gradle":true, "cmd":"c_stopServices"],
+	"3swap":["gradle":true, "cmd":"b_deployResources d_deployApps"],
+	"4start":["gradle":true, "cmd":"e_startServices"]
+]
+ext.mcp.internal.normalizeWorkAction = { t ->
+	//def result = t
+	def result = null
+	mcp.api.workActions.each { k,v ->
+		if(v.contains(t)) result = k
+	}
+	return result
+}
+ext.mcp.internal.digest = { s ->
+	//-- first decompose s and place values in appropriate buckets based on prelim
+	def p = "action", follow = null, theleader = false
+	s.each {
+		if(mcp.internal.prelimChars.contains(it)) {
+			theleader = !theleader
+			p = it
+		} else {
+			if(follow != theleader) {
+				//-- need new bucket
+				if(!mcp.internal.args[p]) mcp.internal.args[p] = [""]
+				else mcp.internal.args[p].add("")
+			}
+			//-- add to p bucket
+			mcp.internal.args[p][mcp.internal.args[p].size()-1] += it
+			follow = theleader
+		}
+	}
+	//-- next determine any new host-tasks and return their names in a list
+	def hosts = mcp.internal.args['@'], actions = mcp.internal.args["action"]
+	if(!hosts || !actions) return null
+	def tasks = [], taskit = null, n = null
+	actions.each { action ->
+		n = mcp.internal.normalizeWorkAction(action)
+		if(n) {
+			hosts.each { host ->
+				taskit = ":${host}:${n}"
+				if(!mcp.internal.tasksAdded.contains(taskit)) {
+					tasks += taskit
+					mcp.internal.tasksAdded += taskit
+				}
+			}
+		}
+	}
+	return tasks
+}
+ext.mcp.internal.buildActionsDoc = {
+	def d = "\n=== ACTIONS ===\n\n"
+	(mcp.api.workActions + mcp.api.docActions).each { k,v ->
+		d += "- ${v.join(', ')}\n"
+	}
+	return d
+}
+ext.mcp.internal.buildHostsDoc = {
+	def d = "\n=== HOSTS ===\n\n"
+	//-- note that subprojects is a TreeSet (sorted by name)
+	subprojects.each {
+		d += "- ${it.name}\n"
+	}
+	return d
+}
+ext.mcp.internal.loadProperties = { f ->
+	def props = new Properties()
+	def file = file(f)
+	if(file.canRead()) props.load(new FileInputStream(file))
+	return props
+}
+
+//====================== docs namespace ======================//
+ext.mcp.docs = [:]
+ext.mcp.docs.logo = """
+      ___           ___           ___   
+     /\\  \\         /\\__\\         /\\  \\  
+    |::\\  \\       /:/  /        /::\\  \\ 
+    |:|:\\  \\     /:/  /        /:/\\:\\__\\
+  __|:|\\:\\  \\   /:/  /  ___   /:/ /:/  /
+ /::::|_\\:\\__\\ /:/__/  /\\__\\ /:/_/:/  / 
+ \\:\\~~\\  \\/__/ \\:\\  \\ /:/  / \\:\\/:/  /  
+  \\:\\  \\        \\:\\  /:/  /   \\::/__/   
+   \\:\\  \\        \\:\\/:/  /     \\:\\  \\   
+    \\:\\__\\        \\::/  /       \\:\\__\\  
+     \\/__/         \\/__/         \\/__/  
+     MASTER       CONTROL       PROGRAM
+
+        Copyright 2013 Andrew Goode
+           Licensed under ALv2
+       https://github.com/nexdrew/mcp
+"""
+
+ext.mcp.docs.syntax = """
+=== COMMAND SYNTAX ===
+
+Run actions against one or more hosts using the following syntax:
+
+    \$ ./mcp <action1> [<action2> ... <actionN>] @<host1> [@<host2> ... @<hostN>] [%<version>] [--parallel]
+
+Remote commands must specify at least one action and at least one host.
+"""
+
+ext.mcp.docs.examples = """
+=== EXAMPLES ===
+
+The following will stage (download) 1.0.0 artifacts on host1 and host2:
+
+    \$ ./mcp stage @host1 @host2 %1.0.0
+
+Note that order doesn't matter and whitespace only matters for specifying actions.
+The following are equivalent to the previous example:
+
+    \$ ./mcp stage@host1@host2%1.0.0
+    \$ ./mcp %1.0.0 stage @host1@host2
+
+Also note that actions can be executed concurrently for multiple hosts by using the --parallel flag.
+The following will stage 1.0.0 artifacts to host1 and host2 at the same time:
+
+    \$ ./mcp stage @host1 @host2 %1.0.0 --parallel
+"""
+
+ext.mcp.docs.actions = mcp.internal.buildActionsDoc()
+
+ext.mcp.docs.hosts = mcp.internal.buildHostsDoc()
+
+ext.mcp.docs.footer = """
+=== SAY WHAT? ===
+
+If you have questions or problems, email andrewbgoode [at] gmail.com and ask about mcp.
+"""
+
+ext.mcp.docs.help = mcp.docs.values().join("")
+
+//====================== task definitions ======================//
+buildscript {
+	repositories {
+		mavenCentral()
+	}
+	dependencies {
+		classpath group: "org.hidetake", name: "gradle-ssh-plugin", version: "0.1.7"
+	}
+}
+
+apply plugin: 'ssh'
+
+ssh {
+	config(StrictHostKeyChecking: "no")
+}
+
+remotes {
+	def hosts = mcp.internal.loadProperties("../hosts.properties")
+	def sshp = mcp.internal.loadProperties("../ssh.properties")
+
+	def homeDir = new File("$System.env.HOME")
+	if(!(homeDir.exists() && homeDir.isDirectory())) homeDir = file("${System.properties['user.home']}")
+
+	def username = sshp.getProperty("remoteUsername", "sark")
+	def pkFile = new File(homeDir, sshp.getProperty("privateKey", ".ssh/id_rsa"))
+	def ppFile = new File(homeDir, sshp.getProperty("privateKeyPassphrase", ".ssh/id_rsa.pp"))
+	def secret = ppFile.canRead() ? ppFile.text : ""
+
+	subprojects.each {
+		"$it.name" {
+			role(hosts.getProperty(it.name, "default"))
+			host = "$it.name"
+			user = "$username"
+			identity = pkFile
+			passphrase = secret
+		}
+	}
+}
+
+tasks.addRule("This is a catch-all rule") { taskName ->
+	task(taskName) {
+		def dummy = true
+		mcp.api.docActions.each { k,v ->
+			if(v.contains(taskName)) {
+				dummy = false
+				doLast {
+					println mcp.docs[k]
+				}
+			}
+		}
+		enabled = !dummy
+	}
+	if(!mcp.internal.firstTask) mcp.internal.firstTask = tasks[taskName]
+	
+	def newTasks = mcp.internal.digest(taskName)
+	if(newTasks) {
+		newTasks.each {
+			def newTask = it.substring(it.lastIndexOf(':')+1), pr = it - ":$newTask"
+			project(pr) {
+				task(newTask) << {
+					def r = remotes[pr - ":"]
+					//println "> I've got a little challenge for you, ${r.user}."
+					try {
+						sshexec {
+							session(r) {
+								def cmdMap = mcp.internal.workCommands[newTask]
+								def cmd = cmdMap.cmd
+								if(cmdMap.gradle) {
+									cmd = "./gradlew"
+									if(mcp.internal.args['%']) cmd += " targetVersion"+mcp.internal.args['%'][0]
+									cmd += " $cmdMap.cmd"
+								}
+								println "sudo $cmd"
+								execute("sudo $cmd", pty:true)
+							}
+						}
+					} catch(Exception e) {
+						//println "> You have failed me! End of line!"
+						throw new RuntimeException(e)
+					}
+					//println "> Well done. End of line!";
+				}
+			}
+			mcp.internal.firstTask.dependsOn it
+		}
+	}
+}
+

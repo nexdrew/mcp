@@ -1,0 +1,3 @@
+#!/bin/bash
+
+./MCTRL_751/gradlew -c ./MCTRL_751/settings.gradle -b ./MCTRL_751/build.gradle -q "$@"

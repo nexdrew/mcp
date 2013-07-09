@@ -1,0 +1,6 @@
+# The username of the SSH account used on each remote host
+remoteUsername=sark
+# The path to your local SSH private key file (relative to your HOME directory)
+privateKey=.ssh/id_rsa
+# The path to a local file containing the passphrase for your private key (relative to your HOME directory)
+privateKeyPassphrase=.ssh/id_rsa.pp
